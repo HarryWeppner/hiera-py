@@ -12,7 +12,7 @@ import uuid
 
 import hiera
 import hiera.exc
-
+from sets import Set
 
 class HieraClientTests(unittest.TestCase):
     __doc__
@@ -143,5 +143,26 @@ class HieraClientTests(unittest.TestCase):
                             'environment=unittest', 'fqdn=ima-superstar']
 
         actual_command = h._command('some-key')
+
+        self.assertEqual(expected_command[0:3], actual_command[0:3])
+        self.assertEqual(Set(expected_command[-3:]), Set(actual_command[-3:]))
+
+    def test_command_dict(self):
+        """Verify command returns list with array option"""
+
+        h = self.create_client('my-config.yml')
+        expected_command = ['hiera', '--hash', '--config', 'my-config.yml', 'some-key']
+
+        actual_command = h._command('some-key', dict)
+
+        self.assertEqual(expected_command, actual_command)
+
+    def test_command_list(self):
+        """Verify command returns list with hash option"""
+
+        h = self.create_client('my-config.yml')
+        expected_command = ['hiera', '--array', '--config', 'my-config.yml', 'some-key']
+
+        actual_command = h._command('some-key', list)
 
         self.assertEqual(expected_command, actual_command)

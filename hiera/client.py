@@ -8,6 +8,7 @@ from __future__ import print_function, unicode_literals
 import logging
 import os.path
 import subprocess
+import json
 
 import hiera.exc
 
@@ -51,7 +52,7 @@ class HieraClient(object):
         params_string = ', '.join(params_list)
         return '{0}({1})'.format(self.__class__.__name__, params_string)
 
-    def get(self, key_name):
+    def get(self, key_name, lookup_type=None):
         """Request the given key from hiera.
 
         Returns the string version of the key when successful.
@@ -64,23 +65,42 @@ class HieraClient(object):
         :param key_name: string key
         :rtype: str value for key or None
         """
-        return self._hiera(key_name)
+        return self._hiera(key_name, lookup_type)
 
-    def _command(self, key_name):
+    def _command(self, key_name, lookup_type=None):
         """Returns a hiera command list that is suitable for passing to
         subprocess calls.
 
         :param key_name:
         :rtype: list that is hiera command
         """
+
+        lookup_cmd = None
+
+        if lookup_type is not None:
+            lookup_cmd = "--%s" % { list: 'array', dict: 'hash' }[lookup_type]
+
         cmd = [self.hiera_binary,
                '--config', self.config_filename,
                key_name]
+
+        if lookup_cmd is not None:
+            cmd.insert(1, lookup_cmd)
+
         cmd.extend(map(lambda *env_var: '='.join(*env_var),
                        self.environment.iteritems()))
         return cmd
 
-    def _hiera(self, key_name):
+    def _to_dict_or_list(self, string):
+        """Converts a ruby hash to json"""
+
+        string = string.replace('\n','')
+        to_json_cmd = ['ruby', '-e', 'require "json"; puts JSON.generate(%s)' % string]
+        json_output = subprocess.check_output(to_json_cmd, stderr=subprocess.STDOUT)
+        return json.loads(json_output)
+
+
+    def _hiera(self, key_name, lookup_type=None):
         """Invokes hiera in a subprocess with the instance environment to query
         for the given key.
 
@@ -91,13 +111,18 @@ class HieraClient(object):
         not be found.
 
         :param key_name: string key
+        :param lookup_type: lookup type = None, list or dict
         :rtype: str value for key or None
         """
-        hiera_command = self._command(key_name)
+        hiera_command = self._command(key_name, lookup_type)
         output = None
         try:
             output = subprocess.check_output(
                 hiera_command, stderr=subprocess.STDOUT)
+
+            if lookup_type is not None:
+                output = self._to_dict_or_list(output)
+
         except OSError as ex:
             raise hiera.exc.HieraNotFoundError(
                 'Could not find hiera binary at: {0}'.format(
@@ -108,11 +133,13 @@ class HieraClient(object):
                 'message: {2} console output: {3}'.format(
                     key_name, ex.returncode, ex.message, ex.output))
         else:
-            value = output.strip()
-            if not value:
+            if isinstance(output, basestring):
+                output = output.strip()
+
+            if not output:
                 return None
             else:
-                return value
+                return output
 
     def _validate(self):
         """Validate the instance attributes. Raises HieraError if issues are
