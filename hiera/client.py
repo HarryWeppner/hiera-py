@@ -65,7 +65,20 @@ class HieraClient(object):
         :param key_name: string key
         :rtype: str value for key or None
         """
-        return self._hiera(key_name, lookup_type)
+
+        try:
+            value = self._hiera(key_name, lookup_type)
+
+        except hiera.exc.HieraError:
+            if lookup_type is None:
+                value = ''
+            elif lookup_type == dict:
+                value = dict()
+            elif lookup_type == list:
+                value = []
+
+        return value
+
 
     def _command(self, key_name, lookup_type=None):
         """Returns a hiera command list that is suitable for passing to
