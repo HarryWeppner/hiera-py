@@ -6,6 +6,7 @@
 from __future__ import print_function, unicode_literals
 
 import logging
+import os
 import os.path
 import subprocess
 import json
@@ -109,7 +110,7 @@ class HieraClient(object):
 
         string = string.replace('\n','')
         to_json_cmd = ['ruby', '-e', 'require "json"; puts JSON.generate(%s)' % string]
-        json_output = subprocess.check_output(to_json_cmd, stderr=subprocess.STDOUT)
+        json_output = subprocess.check_output(to_json_cmd, env=os.environ, stderr=subprocess.STDOUT)
         return json.loads(json_output)
 
 
@@ -131,7 +132,9 @@ class HieraClient(object):
         output = None
         try:
             output = subprocess.check_output(
-                hiera_command, stderr=subprocess.STDOUT)
+                hiera_command,
+                env=os.environ,
+                stderr=subprocess.STDOUT)
 
             if lookup_type is not None:
                 output = self._to_dict_or_list(output)
